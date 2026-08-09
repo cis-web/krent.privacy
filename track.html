@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ku">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>شوپاندنی گەیشتنەکەت — Krent</title>
+<style>
+  :root {
+    --krent-blue: #1565C0;
+    --krent-blue-dark: #0D47A1;
+    --krent-gold: #FFC107;
+    --krent-white: #FFFFFF;
+    --krent-bg: #F5F7FA;
+    --krent-text: #1A1A2E;
+    --krent-text-light: #6B7280;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, sans-serif;
+    background: var(--krent-bg);
+    color: var(--krent-text);
+  }
+  #map {
+    width: 100%;
+    height: 46vh;
+    background: #E2E8F0;
+  }
+  .info-card {
+    background: var(--krent-white);
+    border-radius: 20px 20px 0 0;
+    margin-top: -20px;
+    position: relative;
+    padding: 20px;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
+    min-height: 40vh;
+  }
+  .status-pill {
+    display: inline-block;
+    padding: 6px 14px;
+    border-radius: 20px;
+    background: #E3F2FD;
+    color: var(--krent-blue);
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 16px;
+  }
+  .driver-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+  .driver-photo {
+    width: 64px;
+    height: 64px;
+    border-radius: 14px;
+    object-fit: cover;
+    background: #F1F5F9;
+    flex-shrink: 0;
+  }
+  .driver-name {
+    font-size: 17px;
+    font-weight: 700;
+  }
+  .driver-meta {
+    font-size: 13px;
+    color: var(--krent-text-light);
+    margin-top: 2px;
+  }
+  .actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 6px;
+  }
+  .btn {
+    flex: 1;
+    text-align: center;
+    padding: 13px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 14px;
+    text-decoration: none;
+    display: block;
+    border: none;
+    cursor: pointer;
+  }
+  .btn-whatsapp {
+    background: #25D366;
+    color: white;
+  }
+  .btn-map {
+    background: #F1F5F9;
+    color: var(--krent-text);
+  }
+  .center-msg {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--krent-text-light);
+  }
+  .logo-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px;
+    font-weight: 700;
+    color: var(--krent-blue-dark);
+  }
+  .logo-circle {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: var(--krent-blue);
+    color: var(--krent-gold);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+
+  <div class="logo-row"><span class="logo-circle">K</span> Krent</div>
+
+  <div id="map"></div>
+
+  <div class="info-card">
+    <div id="loading-state" class="center-msg">چاوەڕوان بە، زانیارییەکان بار دەکرێن...</div>
+
+    <div id="ride-content" style="display:none;">
+      <div class="status-pill" id="status-pill"></div>
+
+      <div class="driver-row">
+        <img id="driver-photo" class="driver-photo" alt="" onerror="this.style.visibility='hidden'" />
+        <div>
+          <div class="driver-name" id="driver-name"></div>
+          <div class="driver-meta" id="driver-meta"></div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <a class="btn btn-whatsapp" id="whatsapp-btn" target="_blank">📲 پەیوەندی بە شۆفێر</a>
+        <a class="btn btn-map" id="map-external-btn" target="_blank">🗺️ کردنەوە لە Google Maps</a>
+      </div>
+    </div>
+
+    <div id="error-state" class="center-msg" style="display:none;">
+      ئەم لینکە دروست نییە یان گەیشتەکە کۆتایی هاتووە.
+    </div>
+  </div>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore-compat.js"></script>
+
+  <script>
+    // ==========================================================
+    // Krent - Live Tracking Page (بۆ کڕیار، بەبێ پێویستی چوونەژوورەوە)
+    // ==========================================================
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDpPh8dG28k1lu9nqLBHUMBMV1N6hmka54",
+      authDomain: "krent-f6c77.firebaseapp.com",
+      projectId: "krent-f6c77",
+      storageBucket: "krent-f6c77.firebasestorage.app",
+      messagingSenderId: "778543238606",
+      appId: "1:778543238606:web:962d7b59f3c01307972f9f",
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const GOOGLE_MAPS_API_KEY = "AIzaSyDpPh8dG28k1lu9nqLBHUMBMV1N6hmka54";
+
+    const params = new URLSearchParams(window.location.search);
+    const rideId = params.get("ride");
+
+    let map = null;
+    let driverMarker = null;
+    let customerMarker = null;
+
+    function loadGoogleMaps(callback) {
+      const script = document.createElement("script");
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&callback=__krentMapsLoaded`;
+      window.__krentMapsLoaded = callback;
+      document.head.appendChild(script);
+    }
+
+    function initMap(centerLat, centerLng) {
+      map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat: centerLat, lng: centerLng },
+        zoom: 14,
+        disableDefaultUI: true,
+        zoomControl: true,
+      });
+    }
+
+    function upsertCustomerMarker(lat, lng) {
+      if (!map) return;
+      if (customerMarker) {
+        customerMarker.setPosition({ lat, lng });
+        return;
+      }
+      customerMarker = new google.maps.Marker({
+        position: { lat, lng },
+        map: map,
+        title: "شوێنی تۆ",
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 9,
+          fillColor: "#1565C0",
+          fillOpacity: 1,
+          strokeColor: "#FFFFFF",
+          strokeWeight: 3,
+        },
+      });
+    }
+
+    function upsertDriverMarker(lat, lng) {
+      if (!map) return;
+      if (driverMarker) {
+        driverMarker.setPosition({ lat, lng });
+      } else {
+        driverMarker = new google.maps.Marker({
+          position: { lat, lng },
+          map: map,
+          title: "شۆفێر",
+          icon: {
+            path: "M23.5,7c-0.3,0-0.6,0.1-0.9,0.2L21,4.5C20.5,3.6,19.6,3,18.6,3H5.4C4.4,3,3.5,3.6,3,4.5L1.4,7.2C1.1,7.1,0.8,7,0.5,7C0.2,7,0,7.2,0,7.5v3C0,10.8,0.2,11,0.5,11H1c0,1.1,0.9,2,2,2s2-0.9,2-2h14c0,1.1,0.9,2,2,2s2-0.9,2-2h0.5c0.3,0,0.5-0.2,0.5-0.5v-3C24,7.2,23.8,7,23.5,7z",
+            scale: 1.1,
+            fillColor: "#FFC107",
+            fillOpacity: 1,
+            strokeColor: "#0D47A1",
+            strokeWeight: 1,
+            anchor: new google.maps.Point(12, 12),
+          },
+        });
+      }
+
+      const bounds = new google.maps.LatLngBounds();
+      bounds.extend(driverMarker.getPosition());
+      if (customerMarker) bounds.extend(customerMarker.getPosition());
+      map.fitBounds(bounds, 60);
+    }
+
+    function renderRide(ride) {
+      document.getElementById("loading-state").style.display = "none";
+      document.getElementById("ride-content").style.display = "block";
+
+      const statusLabels = {
+        assigned: "🕐 شۆفێر دیاریکراوە، چاوەڕوانی دەستپێکردنە",
+        en_route: "🚗 شۆفێر لە ڕێگایە بۆ لای تۆ",
+        arrived: "✔ شۆفێر گەیشتووەتە لات",
+        completed: "✅ گەیشتنەکە تەواو بوو",
+        cancelled: "❌ گەیشتنەکە هەڵوەشێنراوەتەوە",
+      };
+      document.getElementById("status-pill").textContent = statusLabels[ride.status] || ride.status;
+
+      document.getElementById("driver-photo").src = ride.driverPhotoUrl || "";
+      document.getElementById("driver-name").textContent = ride.driverName || "شۆفێر";
+      document.getElementById("driver-meta").textContent = [ride.vehicleModel, ride.vehiclePlate]
+        .filter(Boolean)
+        .join(" · ");
+
+      document.getElementById("whatsapp-btn").href = `https://wa.me/${(ride.driverMobile || "").replace(
+        /\D/g,
+        ""
+      )}?text=${encodeURIComponent("سڵاو، من کڕیارەکەم لە Krent")}`;
+
+      if (ride.customerLocation && !map) {
+        initMap(ride.customerLocation.lat, ride.customerLocation.lng);
+        upsertCustomerMarker(ride.customerLocation.lat, ride.customerLocation.lng);
+      } else if (ride.customerLocation && map) {
+        upsertCustomerMarker(ride.customerLocation.lat, ride.customerLocation.lng);
+      }
+
+      if (ride.driverLocation && map) {
+        upsertDriverMarker(ride.driverLocation.lat, ride.driverLocation.lng);
+        document.getElementById(
+          "map-external-btn"
+        ).href = `https://www.google.com/maps?q=${ride.driverLocation.lat},${ride.driverLocation.lng}`;
+      }
+    }
+
+    function showError() {
+      document.getElementById("loading-state").style.display = "none";
+      document.getElementById("error-state").style.display = "block";
+    }
+
+    if (!rideId) {
+      showError();
+    } else {
+      loadGoogleMaps(() => {
+        db.collection("taxiRides")
+          .doc(rideId)
+          .onSnapshot(
+            (doc) => {
+              if (!doc.exists) {
+                showError();
+                return;
+              }
+              renderRide(doc.data());
+            },
+            (err) => {
+              console.error("track listener error:", err);
+              showError();
+            }
+          );
+      });
+    }
+  </script>
+</body>
+</html>
